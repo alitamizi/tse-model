@@ -103,8 +103,11 @@ def scan(s, C, now_teh, final=False):
     top100 = set(stocks[stocks['نوع'] == 'سهم'].sort_values('mcap', ascending=False).head(100)['sym'])
     A = []
     def add(r, rule, note, strength):
+        # weight: low trade value (vs. the symbol's usual pace, or tiny in absolute terms) means a less trustworthy signal
+        w = float(np.clip(r.pace, 0, 1)) if r.pace == r.pace else 0.5
+        if r.value < 2e10: w *= 0.5
         A.append(dict(sym=r.sym, rule=rule, note=note, strength=strength, last=r['last'], close=r['close'], cpct=r.cpct, lpct=r.lpct,
-                      bp=r.bp, nrp=r.nrp, pace=r.pace, pr10=r.pr10, pr20=r.pr20))
+                      bp=r.bp, nrp=r.nrp, pace=r.pace, pr10=r.pr10, pr20=r.pr20, w=round(w, 2), value=r.value))
     for _, r in stocks.iterrows():
         big = r.sym in top100
         # R2 big caps: after 20-day drop >=12%, strong day with heavy real buying (validated ~60%)
@@ -136,7 +139,7 @@ def market_line(s, idx):
     except Exception: pass
     return t
 
-SIGCOLS = ['time_utc', 'kind', 'sym', 'rule', 'strength', 'note', 'last', 'close', 'cpct', 'lpct', 'bp', 'nrp', 'pace', 'pr10', 'pr20', 'p', 'rank', 'lag_s']
+SIGCOLS = ['time_utc', 'kind', 'sym', 'rule', 'strength', 'note', 'last', 'close', 'cpct', 'lpct', 'bp', 'nrp', 'pace', 'pr10', 'pr20', 'p', 'rank', 'lag_s', 'w', 'value']
 
 def log_signals(A, now, lag, kind):
     if A is None or len(A) == 0: return A
@@ -169,7 +172,7 @@ def cmd_intraday():
     print('MARKET', market_line(s, idx))
     print('ALERTS_TOTAL', 0 if A is None else len(A), 'NEW', 0 if new is None else len(new))
     if new is not None and len(new):
-        print(new[['sym', 'rule', 'strength', 'last', 'lpct', 'bp', 'nrp', 'pace', 'pr20']].round(3).to_string())
+        print(new[['sym', 'rule', 'strength', 'last', 'lpct', 'bp', 'nrp', 'pace', 'w', 'pr20']].round(3).to_string())
     print('SYNC', sync(f'Intraday scan {nt:%Y-%m-%d %H:%M}'))
 
 def append_day(s, X, N):

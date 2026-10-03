@@ -329,8 +329,13 @@ def cmd_close():
             last['p_' + side] = lgb.Booster(model_str=M['models'][side]).predict(last[FEAT])
         cur = s.set_index('sym')
         rows = []
+        # liquidity filter (added 2026-10-03 after review): skip symbols with tiny trade value or locked in a queue on the side we want to enter
+        last['k'] = last.sym.map(norm)
+        val = last.k.map(cur['value']); q = last.k.map(cur['queue']).fillna('')
+        liquid = val >= 2e10
         for side, rule, st in [('yb', '5%-خرید', 'خرید'), ('ys', '5%-فروش', 'فروش')]:
-            top = last.sort_values('p_' + side, ascending=False).head(10)
+            ok = liquid & (q != ('صف خرید' if side == 'yb' else 'صف فروش'))
+            top = last[ok].sort_values('p_' + side, ascending=False).head(10)
             for rk, r in enumerate(top.itertuples(), 1):
                 sy = norm(r.sym)
                 rows.append(dict(sym=sy, rule=rule, note=f'رتبه {rk} مدل ۵٪ (۱۰ روز)', strength=st,

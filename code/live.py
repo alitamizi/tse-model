@@ -333,6 +333,24 @@ def cmd_close():
                     for m in v.split(','):
                         tech.append(dict(sym=r.sym, rule='تکنیکال-' + m, note=M_NAMES.get(m, m), strength=st,
                                          last=cur['last'].get(r.sym, np.nan), close=cur['close'].get(r.sym, np.nan)))
+        # flow signals of today (real and legal side), logged so each symbol's flow behaviour is scored live too
+        Cx = context(X)
+        for sy, r in cur.iterrows():
+            if not (r.ntr > 0) or r['نوع'] not in ('سهم', 'صندوق'): continue
+            pace = r.value / Cx['v20'].get(sy, np.nan) if sy in Cx.index else np.nan
+            pr5 = Cx['pr5'].get(sy, np.nan) if sy in Cx.index else np.nan
+            legal = -r.nrp if r.nrp == r.nrp else np.nan
+            qb = bool(r.at_up and not r.locked_up and r['last'] / r['close'] - 1 >= 0.01)
+            qs = bool(r.at_dn and r['last'] / r['close'] - 1 <= -0.01)
+            flags = [('جریان-قدرت‌خریدار-حقیقی-بالا', 'خرید', r.bp >= 2), ('جریان-ورود-پول-حقیقی', 'خرید', r.nrp >= 0.10),
+                     ('جریان-خرید-حقوقی', 'خرید', legal >= 0.10), ('جریان-خرید-حقوقی-در-افت', 'خرید', legal >= 0.10 and pr5 < 0),
+                     ('جریان-ارزش-بالا-روز-مثبت', 'خرید', pace >= 2 and r.cpct > 0), ('جریان-صف-خرید-درون‌روز', 'خرید', qb),
+                     ('جریان-قدرت‌خریدار-حقیقی-پایین', 'فروش', r.bp <= 0.5), ('جریان-خروج-پول-حقیقی', 'فروش', r.nrp <= -0.10),
+                     ('جریان-فروش-حقوقی', 'فروش', legal <= -0.10), ('جریان-فروش-حقوقی-در-رشد', 'فروش', legal <= -0.10 and pr5 > 0),
+                     ('جریان-ارزش-بالا-روز-منفی', 'فروش', pace >= 2 and r.cpct < 0), ('جریان-صف-فروش-درون‌روز', 'فروش', qs)]
+            for nm, st, f in flags:
+                if f is True or (isinstance(f, (bool, np.bool_)) and bool(f)):
+                    tech.append(dict(sym=sy, rule=nm, note='سیگنال جریان پول (حقیقی/حقوقی)', strength=st, last=r['last'], close=r['close']))
         log_signals(pd.DataFrame(tech), now, lag, 'eod-tech')
         DV = pd.read_csv(os.path.join(STATE, 'divergence.csv'))
         print('TECH signals', len(tech), '| DIVERGENCES', len(DV), '(منفی', int(DV.divergence.str.contains('منفی').sum()), '/ مثبت', int(DV.divergence.str.contains('مثبت').sum()), ')')

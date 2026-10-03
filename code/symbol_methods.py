@@ -4,6 +4,8 @@ R = pd.read_pickle('bt.pkl'); R['n'] = R.nb + R.ns; R['k'] = R.nbc + R.nsc
 R = R[R.year >= 1400]
 H = R.groupby(['sym', 'method'])[['n', 'k']].sum().reset_index(); H['sym'] = H.sym.map(live.norm)
 H['rule'] = 'تکنیکال-' + H.method
+FL = pd.read_csv(os.path.join(live.STATE, 'symbol_flow_hist.csv'))[['sym', 'rule', 'n', 'k']]
+H = pd.concat([H[['sym', 'rule', 'n', 'k']], FL])
 E = pd.read_csv(os.path.join(live.STATE, 'evaluation.csv')) if os.path.exists(os.path.join(live.STATE, 'evaluation.csv')) else pd.DataFrame(columns=['sym', 'rule', 'result'])
 E = E[E.result.isin(['درست', 'غلط'])]
 Lv = E.groupby(['sym', 'rule']).result.agg(n_live='size', k_live=lambda s: (s == 'درست').sum()).reset_index()

@@ -160,6 +160,26 @@ try:
 except Exception:
     M_NAMES = {}
 
+FLOWCOLS = ['ارزش معاملات', 'حجم خرید حقیقی', 'تعداد خرید حقیقی', 'حجم فروش حقیقی', 'تعداد فروش حقیقی', 'حجم خرید حقوقی', 'حجم فروش حقوقی']
+
+def baseline(sym_raw, t_utc):
+    """cumulative flows of a symbol as of time t (UTC iso) from the bot's minute archive, else from our saved snapshots"""
+    t = pd.Timestamp(t_utc).tz_convert(TEH)
+    day = t.strftime('%Y-%m-%d'); hhmm = t.strftime('%H:%M:%S')
+    p = os.path.join(REPO, 'archive', f'{day}.csv.gz')
+    if os.path.exists(p):
+        a = pd.read_csv(p, usecols=['زمان دریافت', 'نماد'] + FLOWCOLS)
+        a = a[(a['نماد'] == sym_raw) & (a['زمان دریافت'] <= hhmm)]
+        if len(a): return a.sort_values('زمان دریافت').iloc[-1][FLOWCOLS].astype(float)
+    return None
+
+def interval_flow(cur_row, base):
+    d = cur_row[FLOWCOLS].astype(float) - base
+    bp = (d['حجم خرید حقیقی'] / d['تعداد خرید حقیقی']) / (d['حجم فروش حقیقی'] / d['تعداد فروش حقیقی']) \
+        if d['تعداد خرید حقیقی'] > 0 and d['تعداد فروش حقیقی'] > 0 and d['حجم فروش حقیقی'] > 0 else np.nan
+    share = d['ارزش معاملات'] / cur_row['ارزش معاملات'] if cur_row['ارزش معاملات'] > 0 else np.nan
+    return bp, d['ارزش معاملات'], share, d['حجم خرید حقوقی'] - d['حجم فروش حقوقی']
+
 def monitor_positions(s, now, meta):
     """open positions = confirmed verdicts not yet closed; warn on stop, target or a change of direction"""
     vp = os.path.join(STATE, 'verdicts.csv')
@@ -176,14 +196,20 @@ def monitor_positions(s, now, meta):
         r = cur.loc[k]; buy = v.decision == 'confirm_buy'; e = float(v.entry)
         ret = (r['last'] / e - 1) * (1 if buy else -1)
         why = None
+        # flows SINCE the verdict (not the cumulative day): who traded the value that came after our entry
+        base = baseline(r['نماد'], v.decided_at_utc)
+        bpi, vali, sharei, legali = interval_flow(r, base) if base is not None else (np.nan, np.nan, np.nan, np.nan)
+        print(f'  since verdict: value={vali/1e7:,.0f}m toman ({sharei:.0%} of day) real-bp={bpi:.2f} legal-net-vol={legali:,.0f}')
         if buy:
             if r['last'] <= v.stop: why = 'حد ضرر خورد'
             elif r['last'] >= v.target: why = 'به هدف رسید'
             elif r.queue == 'صف فروش' or (r.bp < 0.7 and r.nrp < -0.10 and r.lpct < 0): why = 'تغییر جهت: فروشنده‌ها غالب شدند'
+            elif bpi < 0.8 and sharei >= 0.25 and r['last'] < e: why = f'تغییر جهت بعد از ورود: {sharei:.0%} ارزش روز بعد از ورود با قدرت خریدار {bpi:.2f} معامله شد و قیمت زیر ورود است'
         else:
             if r['last'] >= v.stop: why = 'حد ضرر خورد'
             elif r['last'] <= v.target: why = 'به هدف رسید'
             elif r.queue == 'صف خرید' or (r.bp > 1.5 and r.nrp > 0.10 and r.lpct > 0): why = 'تغییر جهت: خریدارها غالب شدند'
+            elif bpi > 1.25 and sharei >= 0.25 and r['last'] > e: why = f'تغییر جهت بعد از ورود: خریدارها بعد از ورود غالب شدند (قدرت خریدار {bpi:.2f})'
         print(f'POSITION {v.sym} {v.decision} entry={e:.0f} last={r["last"]:.0f} ret={ret:+.1%} bp={r.bp:.2f} queue={r.queue or "-"}' + (f' EXIT: {why}' if why else ''))
         if why:
             out.append(dict(verdict_id=v.verdict_id, sym=v.sym, side=v.decision, entry=e, exit=r['last'], ret=ret, reason=why,

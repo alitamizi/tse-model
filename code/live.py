@@ -154,6 +154,43 @@ def log_signals(A, now, lag, kind):
         new.reindex(columns=SIGCOLS).to_csv(SIG, mode='a', header=not os.path.exists(SIG), index=False)
     return new
 
+POS = os.path.join(STATE, 'positions.csv')
+try:
+    import methods as _M; M_NAMES = _M.NAMES
+except Exception:
+    M_NAMES = {}
+
+def monitor_positions(s, now, meta):
+    """open positions = confirmed verdicts not yet closed; warn on stop, target or a change of direction"""
+    vp = os.path.join(STATE, 'verdicts.csv')
+    if not os.path.exists(vp): return
+    V = pd.read_csv(vp)
+    V = V[V.decision.astype(str).str.startswith('confirm')]
+    closed = set(pd.read_csv(POS).verdict_id) if os.path.exists(POS) else set()
+    cur = s.drop_duplicates('sym').set_index('sym')
+    out = []
+    for v in V.itertuples():
+        if v.verdict_id in closed: continue
+        k = norm(v.sym)
+        if k not in cur.index: continue
+        r = cur.loc[k]; buy = v.decision == 'confirm_buy'; e = float(v.entry)
+        ret = (r['last'] / e - 1) * (1 if buy else -1)
+        why = None
+        if buy:
+            if r['last'] <= v.stop: why = 'حد ضرر خورد'
+            elif r['last'] >= v.target: why = 'به هدف رسید'
+            elif r.queue == 'صف فروش' or (r.bp < 0.7 and r.nrp < -0.10 and r.lpct < 0): why = 'تغییر جهت: فروشنده‌ها غالب شدند'
+        else:
+            if r['last'] >= v.stop: why = 'حد ضرر خورد'
+            elif r['last'] <= v.target: why = 'به هدف رسید'
+            elif r.queue == 'صف خرید' or (r.bp > 1.5 and r.nrp > 0.10 and r.lpct > 0): why = 'تغییر جهت: خریدارها غالب شدند'
+        print(f'POSITION {v.sym} {v.decision} entry={e:.0f} last={r["last"]:.0f} ret={ret:+.1%} bp={r.bp:.2f} queue={r.queue or "-"}' + (f' EXIT: {why}' if why else ''))
+        if why:
+            out.append(dict(verdict_id=v.verdict_id, sym=v.sym, side=v.decision, entry=e, exit=r['last'], ret=ret, reason=why,
+                            closed_at_utc=now.strftime('%Y-%m-%dT%H:%M:%SZ'), data_fetched_at_utc=meta.get('fetched_at_utc')))
+    if out:
+        pd.DataFrame(out).to_csv(POS, mode='a', header=not os.path.exists(POS), index=False)
+
 def cmd_status():
     meta, lag, snap, idx, now = pull()
     print(json.dumps(dict(fetched_at_utc=meta.get('fetched_at_utc'), symbols=meta.get('symbols'), lag_s=lag, now=now.isoformat()), ensure_ascii=False))
@@ -167,12 +204,22 @@ def cmd_intraday():
     trade_today = s['زمان آخرین معامله'].astype(str).str[:10].eq(nt.strftime('%Y-%m-%d')).mean()
     X, N = load_daily(); C = context(X)
     A, stocks, top100 = scan(s, C, nt)
+    # persistence: an alert counts as persistent only if the same symbol+rule was also present in the previous scan (<= 20 min ago)
+    pp = os.path.join(STATE, 'prev_alerts.json')
+    prev = json.load(open(pp)) if os.path.exists(pp) else {}
+    cur = {}
+    if A is not None and len(A):
+        keys = A.sym + '|' + A.rule
+        A['persist'] = [bool(k in prev and (now.timestamp() - prev[k]) <= 1200) for k in keys]
+        cur = {k: now.timestamp() for k in keys}
+    json.dump(cur, open(pp, 'w'))
     new = log_signals(A, now, lag, 'intraday')
+    monitor_positions(s, now, meta)
     print(f'DATA fetched_at_utc={meta["fetched_at_utc"]} lag={lag:.0f}s symbols={meta["symbols"]} traded_today_share={trade_today:.2f}')
     print('MARKET', market_line(s, idx))
     print('ALERTS_TOTAL', 0 if A is None else len(A), 'NEW', 0 if new is None else len(new))
-    if new is not None and len(new):
-        print(new[['sym', 'rule', 'strength', 'last', 'lpct', 'bp', 'nrp', 'pace', 'w', 'pr20']].round(3).to_string())
+    if A is not None and len(A):
+        print(A[['sym', 'rule', 'strength', 'last', 'lpct', 'bp', 'nrp', 'pace', 'w', 'persist', 'pr20']].round(3).to_string())
     print('SYNC', sync(f'Intraday scan {nt:%Y-%m-%d %H:%M}'))
 
 def append_day(s, X, N):
@@ -273,10 +320,33 @@ def cmd_close():
     print('MARKET', market_line(s, idx))
     if new is not None and len(new):
         print('EOD_ALERTS'); print(new[['sym', 'rule', 'strength', 'close', 'cpct', 'bp', 'nrp', 'pace']].round(3).to_string())
+    # all mechanical technical methods + divergences on the updated daily data; log today's method signals for live scoring
+    try:
+        subprocess.run(['python3', 'tech_daily.py'], cwd=BASE, check=True, timeout=1800, capture_output=True)
+        TS = pd.read_csv(os.path.join(STATE, 'tech_state.csv'))
+        cur = s.drop_duplicates('sym').set_index('sym')
+        tech = []
+        for r in TS.itertuples():
+            for col, st in [('buy_today', 'خرید'), ('sell_today', 'فروش')]:
+                v = getattr(r, col)
+                if isinstance(v, str) and v:
+                    for m in v.split(','):
+                        tech.append(dict(sym=r.sym, rule='تکنیکال-' + m, note=M_NAMES.get(m, m), strength=st,
+                                         last=cur['last'].get(r.sym, np.nan), close=cur['close'].get(r.sym, np.nan)))
+        log_signals(pd.DataFrame(tech), now, lag, 'eod-tech')
+        DV = pd.read_csv(os.path.join(STATE, 'divergence.csv'))
+        print('TECH signals', len(tech), '| DIVERGENCES', len(DV), '(منفی', int(DV.divergence.str.contains('منفی').sum()), '/ مثبت', int(DV.divergence.str.contains('مثبت').sum()), ')')
+        print(DV.head(15).to_string())
+    except Exception as e:
+        print('TECH_ERROR', repr(e)[:300])
     E = evaluate(X)
     if len(E):
         E.to_csv(os.path.join(STATE, 'evaluation.csv'), index=False)
         print('EVAL'); print(E.groupby(['rule', 'result']).size().unstack(fill_value=0).to_string())
+    try:
+        r = subprocess.run(['python3', 'symbol_methods.py'], cwd=BASE, capture_output=True, text=True, timeout=600); print('METHODS', r.stdout.strip()[-200:])
+    except Exception as e:
+        print('METHODS_ERROR', repr(e)[:200])
     rows = None
     if day is not None:
         rows = pd.concat([x.loc[[day]].assign(sym=k) for k, x in X.items() if day in x.index]).rename_axis('date').reset_index() if add else None
@@ -294,7 +364,7 @@ def sync(msg, day_rows=None):
     import shutil
     try:
         os.makedirs(os.path.join(MODEL_REPO, 'state', 'daily'), exist_ok=True)
-        for f in ['signals.csv', 'verdicts.csv', 'evaluation.csv', 'news.csv', 'news_impact.csv']:
+        for f in ['signals.csv', 'verdicts.csv', 'evaluation.csv', 'news.csv', 'news_impact.csv', 'positions.csv', 'tech_state.csv', 'divergence.csv', 'symbol_methods.csv']:
             p = os.path.join(STATE, f)
             if os.path.exists(p): shutil.copy(p, os.path.join(MODEL_REPO, 'state', f))
         if day_rows is not None and len(day_rows):

@@ -277,7 +277,12 @@ def cmd_close():
     rows = None
     if day is not None:
         rows = pd.concat([x.loc[[day]].assign(sym=k) for k, x in X.items() if day in x.index]).rename_axis('date').reset_index() if add else None
-    print('SYNC', sync(f'Session {day.date() if day is not None else ""}: daily rows, signals, evaluation', rows))
+    try:
+        r = subprocess.run(['python3', 'publish_rules.py'], cwd=BASE, capture_output=True, text=True, timeout=600)
+        print('RULES', r.stdout.strip()[-300:] or r.stderr[-300:])
+    except Exception as e:
+        print('RULES_ERROR', repr(e)[:200])
+    print('SYNC', sync(f'Session {day.date() if day is not None else ""}: daily rows, signals, evaluation, rules', rows))
 
 MODEL_REPO = '/home/claude/tse-model'
 

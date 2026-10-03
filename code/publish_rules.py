@@ -18,7 +18,7 @@ name = lambda k: ref['نماد'].get(live.norm(k))
 now = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 rules = [
  dict(id='R2', name='برگشت نماد بزرگ بعد از افت', side='buy', universe='top100', symbols=[],
-      when=[['pr20', '<=', -0.12], ['cpct', '>=', 0.02], ['locked_up', '==', False], ['bp', '>=', 3], ['nrp', '>=', 0.10]],
+      when=[['pr20', '<=', -0.12], ['cpct', '>=', 2], ['locked_up', '==', False], ['bp', '>=', 3], ['nrp', '>=', 0.10]],
       note='تاریخی حدود ۶۰٪ به +۱۵٪ در ۴۰ روز (پیش از −۸٪)', cooldown_min=1440),
  dict(id='R3', name='برگشت از کف دامنه بعد از افت', side='buy', universe='stocks', symbols=[],
       when=[['pr10', '<=', -0.08], ['dn_to_up', '==', True], ['pace', '>=', 1.5]],
@@ -30,10 +30,10 @@ rules = [
       symbols=[s for s in map(name, live.FUNDS) if s], when=[['bp', '>=', 2]],
       note='تاریخی حدود ۶۶٪ به +۵٪ در ۱۰ روز', cooldown_min=1440),
  dict(id='ACC', name='انباشت چندروزه و چرخش به بالا', side='buy', universe='stocks', symbols=[],
-      when=[['v5_20', '>=', 1.5], ['pr5', '<=', -0.03], ['dn_days5', '>=', 3], ['lpct', '>=', 0.02], ['bp', '>=', 1.5], ['locked_up', '==', False]],
+      when=[['v5_20', '>=', 1.5], ['pr5', '<=', -0.03], ['dn_days5', '>=', 3], ['lpct', '>=', 2], ['bp', '>=', 1.5], ['locked_up', '==', False]],
       note='در حال ارزیابی', cooldown_min=1440),
  dict(id='DIST', name='توزیع چندروزه و چرخش به پایین', side='sell', universe='stocks', symbols=[],
-      when=[['v5_20', '>=', 1.5], ['pr5', '>=', 0.08], ['up_days5', '>=', 3], ['lpct', '<=', -0.02], ['bp', '<=', 0.7]],
+      when=[['v5_20', '>=', 1.5], ['pr5', '>=', 0.08], ['up_days5', '>=', 3], ['lpct', '<=', -2], ['bp', '<=', 0.7]],
       note='در حال ارزیابی', cooldown_min=1440),
  dict(id='QB', name='صف خرید تازه در نماد بزرگ', side='buy', universe='top100', symbols=[],
       when=[['q_new_buy', '==', True], ['locked_up', '==', False], ['pace', '>=', 1.0]],

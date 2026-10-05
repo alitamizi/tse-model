@@ -413,7 +413,7 @@ def sync(msg, day_rows=None):
     import shutil
     try:
         os.makedirs(os.path.join(MODEL_REPO, 'state', 'daily'), exist_ok=True)
-        for f in ['signals.csv', 'verdicts.csv', 'evaluation.csv', 'news.csv', 'news_impact.csv', 'positions.csv', 'tech_state.csv', 'divergence.csv', 'symbol_methods.csv']:
+        for f in ['signals.csv', 'verdicts.csv', 'evaluation.csv', 'news.csv', 'news_impact.csv', 'positions.csv', 'tech_state.csv', 'divergence.csv', 'symbol_methods.csv', 'decisions_10m.csv', 'decision_eval.csv', 'metrics_daily.csv']:
             p = os.path.join(STATE, f)
             if os.path.exists(p): shutil.copy(p, os.path.join(MODEL_REPO, 'state', f))
         if day_rows is not None and len(day_rows):

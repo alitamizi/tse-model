@@ -327,6 +327,7 @@ def cmd_close():
         last = F[F.date == F.date.max()].copy()
         for side in ['yb', 'ys']:
             last['p_' + side] = lgb.Booster(model_str=M['models'][side]).predict(last[FEAT])
+        last[['sym', 'date', 'p_yb', 'p_ys']].to_csv(os.path.join(STATE, 'five_scores.csv'), index=False)
         cur = s.set_index('sym')
         rows = []
         # liquidity filter (added 2026-10-03 after review): skip symbols with tiny trade value or locked in a queue on the side we want to enter

@@ -8,7 +8,13 @@ OUT = f'live_state/replay_hourly_{DAY}.json'
 AR = 'live_state/tse-data/archive/'
 def arc(name):
     for ext in ('.csv.xz', '.csv.gz'):
-        if os.path.exists(AR + name + ext): return pd.read_csv(AR + name + ext)
+        if os.path.exists(AR + name + ext):
+            d = pd.read_csv(AR + name + ext, low_memory=False)
+            if 'زمان دریافت' in d:   # repeated header lines from appended chunks
+                d = d[d['زمان دریافت'] != 'زمان دریافت']
+                for c in d.columns:
+                    if c not in ('زمان دریافت', 'نماد', 'insCode', 'زمان آخرین معامله', 'بازار', 'شاخص'): d[c] = pd.to_numeric(d[c], errors='coerce')
+            return d
     return None
 A = arc(DAY)
 HIST = False
@@ -35,7 +41,7 @@ def from_history():
     H['تعداد معاملات'] = np.where(H['ارزش معاملات'] > 0, 1, 0)
     return H
 now_sec = (dt.datetime.now(live.TEH) - dt.datetime.now(live.TEH).replace(hour=0, minute=0, second=0)).total_seconds()
-if A is None or (DAY == dt.datetime.now(live.TEH).date().isoformat() and pd.to_timedelta(A['زمان دریافت'].iloc[-1]).total_seconds() < now_sec - 900):
+if A is None or (DAY == dt.datetime.now(live.TEH).date().isoformat() and pd.to_timedelta(A['زمان دریافت'].iloc[-1]).total_seconds() < min(now_sec - 900, 12 * 3600 + 25 * 60)):
     A = from_history(); HIST = True
     print('source: data/history (path every ~3 min; interval buyer power not available)')
 st = arc(DAY + '_static')
@@ -125,6 +131,10 @@ def checkpoint(T, label, verbose=True, save=True):
         sell = str(r.strength).startswith('فروش')
         if r.w < 0.5: return 'رد: ارزش کم'
         if not r.persist: return 'منتظر پایداری'
+        if sell:
+            # 2026-10-05: on 2 days, sells rejected by the 30-min flow filter did better next day (87%) than confirmed ones (71%);
+            # the filter is dropped for sells (inrp is still logged so it can be re-tested), result is judged over the next days
+            return 'تأیید فروش (روز بعد)'
         if sell:
             if r.inrp <= -0.1 and (r.ibp < 1 or np.isnan(r.ibp)): return 'تأیید فروش'
             return 'رد: جریان ۳۰دقیقه فروش را تأیید نمی‌کند'

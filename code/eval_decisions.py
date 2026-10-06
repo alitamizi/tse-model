@@ -7,6 +7,14 @@ if not os.path.exists(LOG): raise SystemExit('no log')
 D = pd.read_csv(LOG)
 D = D.sort_values(['day', 'time']).drop_duplicates(['day', 'sym', 'rule', 'decision'], keep='first')
 X, N = pd.read_pickle('panel.pkl'); by = {live.norm(k): k for k in X}
+# market median close-to-close path (to separate a signal's own edge from a market-wide move)
+C = pd.DataFrame({k: x.c for k, x in X.items() if len(x) and x.index[-1] >= max(v.index[-1] for v in X.values()) - pd.Timedelta(days=60)})
+C = C[C.index >= C.index.max() - pd.Timedelta(days=60)]
+def mkt(d0, h):
+    idx = C.index[C.index >= pd.Timestamp(d0)]
+    if len(idx) <= h: return np.nan
+    a, b = C.loc[idx[0]], C.loc[idx[h]]; r = (b / a - 1).replace([np.inf, -np.inf], np.nan)
+    return float(r.median())
 out = []
 for r in D.itertuples():
     k = by.get(r.sym)
@@ -31,6 +39,9 @@ for r in D.itertuples():
         row[f'r{h}'] = fut.iloc[h - 1] / r.last - 1 if len(fut) >= h else np.nan
     out.append(row)
 E = pd.DataFrame(out)
+for h in (1, 3, 5):
+    m = {d: mkt(d, h) for d in E.day.unique()}
+    E[f'mkt{h}'] = E.day.map(m); E[f'x{h}'] = np.where(E.side == 'sell', -1, 1) * (E[f'r{h}'] - E[f'mkt{h}'])   # excess return in the signal's direction
 sgn = np.where(E.side == 'sell', -1, 1)
 for c in ['r_close', 'r1', 'r3', 'r5', 'r10']:
     E['ok_' + c] = np.where(E[c].isna(), np.nan, (E[c] * sgn > 0).astype(float))
@@ -42,5 +53,5 @@ M = E.groupby(['day', 'rule', 'dec']).agg(n=('sym', 'size'), **{f'ok_{c}': (f'ok
 M.to_csv('live_state/metrics_daily.csv', index=False)
 pd.set_option('display.width', 250)
 T = E.groupby(['rule', 'dec']).agg(n=('sym', 'size'), ok1=('ok_r1', 'mean'), g1=('g_r1', 'mean'), ok3=('ok_r3', 'mean'), g3=('g_r3', 'mean'), ok5=('ok_r5', 'mean'), g5=('g_r5', 'mean'),
-                                   tp_ok=('tp5_10d', lambda s: (s == 'درست').sum()), tp_bad=('tp5_10d', lambda s: (s == 'غلط').sum()), tp_open=('tp5_10d', lambda s: (s == 'باز').sum()))
+                                   x1=('x1', 'mean'), x3=('x3', 'mean'), tp_ok=('tp5_10d', lambda s: (s == 'درست').sum()), tp_bad=('tp5_10d', lambda s: (s == 'غلط').sum()), tp_open=('tp5_10d', lambda s: (s == 'باز').sum()))
 print(T.round(3).to_string())

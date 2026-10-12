@@ -2,7 +2,7 @@
 Confidence = estimated probability that price moves 5% in the signal's direction before 5% against it within 10 sessions.
 Evidence: 5% model (calibrated out-of-sample on 1404-1405) + every rule that fired today for the symbol, each weighted by
 how that rule has worked on that symbol (symbol_methods.csv: blended historical/live hit rate)."""
-import os, sys, pickle, numpy as np, pandas as pd, live
+import os, sys, pickle, json, numpy as np, pandas as pd, live
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -40,9 +40,11 @@ SM = pd.read_csv(os.path.join(ST, 'symbol_methods.csv')).set_index(['sym', 'rule
 RULE_ALL = pd.read_csv(os.path.join(ST, 'symbol_methods.csv')).groupby('rule').apply(lambda d: (d.hist_hit * d.n).sum() / max(d.n.sum(), 1))
 LQ = pd.read_csv(os.path.join(ST, 'tse-data', 'data', 'latest.csv'), low_memory=False)
 LQ['sym'] = LQ['نماد'].map(live.norm); QUEUE = LQ.drop_duplicates('sym').set_index('sym')['صف'].fillna('') if 'صف' in LQ else pd.Series(dtype=str)
+QO = os.path.join(ST, f'queue_override_{day}.csv')
+if os.path.exists(QO): QUEUE = pd.read_csv(QO).fillna('').drop_duplicates('sym').set_index('sym')['queue']   # end-of-session queues rebuilt from the archive when the snapshot is from a later time
 DIV = pd.read_csv(os.path.join(ST, 'divergence.csv')); DIV = DIV[DIV.date.astype(str) == day].set_index('sym')['divergence']
 # 3) per-symbol verdict
-rows = []
+rows = []; PEND = []
 for k, x in X.items():
     if x.index[-1] != DAY: continue
     sym = live.norm(k); r = x.iloc[-1]
@@ -66,13 +68,13 @@ for k, x in X.items():
     if sym in DIV.index:
         why['sell'].append(str(DIV[sym]))
     conf = {s: (sum(p * w for p, w in ev[s]) / sum(w for _, w in ev[s])) if ev[s] else np.nan for s in ev}
-    edge = {s: conf[s] - BASE_P[s] if not np.isnan(conf[s]) else -1 for s in conf}
+    PEND.append((sym, r, conf, why)); continue
     # direction must be the more likely of the two outcomes AND beat that side's market base rate by 5 points
     cb, cs = (conf['buy'] if not np.isnan(conf['buy']) else -1), (conf['sell'] if not np.isnan(conf['sell']) else -1)
     side = 'buy' if cb >= cs else 'sell'
-    verdict = {'buy': 'خرید', 'sell': 'فروش'}[side] if edge[side] >= 0.05 else 'خنثی'
+    verdict = {'buy': 'خرید', 'sell': 'فروش'}[side] if edge[side] >= 0.02 else 'خنثی'
     liquid = (r.value >= 2e10)
-    tier = '' if verdict == 'خنثی' else ('قوی' if edge[side] >= 0.10 else 'متوسط')
+    tier = '' if verdict == 'خنثی' else ('قوی' if edge[side] >= 0.10 else 'متوسط' if edge[side] >= 0.05 else 'ضعیف')
     rows.append({'نماد': sym, 'سیگنال': verdict, 'قدرت سیگنال': tier, 'اطمینان': conf[side] if verdict != 'خنثی' else np.nan,
                  'احتمال خرید (۵٪ قبل از −۵٪، ۱۰ روز)': conf['buy'], 'احتمال فروش (−۵٪ قبل از +۵٪، ۱۰ روز)': conf['sell'],
                  'برتری نسبت به میانگین بازار': edge[side] if verdict != 'خنثی' else np.nan,
@@ -82,6 +84,29 @@ for k, x in X.items():
                  'نقدشوندگی': 'کافی' if liquid else 'کم (زیر ۲ میلیارد تومان)',
                  'وضعیت صف در پایان روز': QUEUE.get(sym, '') or '—',
                  'دلایل خرید': ' | '.join(why['buy']), 'دلایل فروش': ' | '.join(why['sell'])})
+# 2026-10-12: the model's probabilities shift for the whole market from day to day (e.g. after a rally almost every stock gets
+# a higher buy probability). Judge each stock against max(historical base rate, today's median across stocks) so the sheet
+# shows stock-specific edge; the market-wide tilt is reported separately.
+MED = {s: float(np.nanmedian([p[2][s] for p in PEND])) for s in ('buy', 'sell')}
+REF = {s: max(BASE_P[s], MED[s]) for s in MED}
+for sym, r, conf, why in PEND:
+    edge = {s: conf[s] - REF[s] if not np.isnan(conf[s]) else -1 for s in conf}
+    pb, ps = conf['buy'], conf['sell']
+    cb, cs = (conf['buy'] if not np.isnan(conf['buy']) else -1), (conf['sell'] if not np.isnan(conf['sell']) else -1)
+    side = 'buy' if edge['buy'] >= edge['sell'] else 'sell'
+    verdict = {'buy': 'خرید', 'sell': 'فروش'}[side] if edge[side] >= 0.02 else 'خنثی'
+    liquid = (r.value >= 2e10)
+    tier = '' if verdict == 'خنثی' else ('قوی' if edge[side] >= 0.10 else 'متوسط' if edge[side] >= 0.05 else 'ضعیف')
+    rows.append({'نماد': sym, 'سیگنال': verdict, 'قدرت سیگنال': tier, 'اطمینان': conf[side] if verdict != 'خنثی' else np.nan,
+                 'احتمال خرید (۵٪ قبل از −۵٪، ۱۰ روز)': conf['buy'], 'احتمال فروش (−۵٪ قبل از +۵٪، ۱۰ روز)': conf['sell'],
+                 'برتری نسبت به میانگین بازار': edge[side] if verdict != 'خنثی' else np.nan,
+                 'قیمت پایانی': r.c, 'تغییر امروز': r.rawpct, 'ارزش معاملات (میلیارد تومان)': r.value / 1e10,
+                 'قدرت خریدار حقیقی': r.bp, 'ورود پول حقیقی / ارزش': r.nrp,
+                 'نقدشوندگی': 'کافی' if liquid else 'کم (زیر ۲ میلیارد تومان)',
+                 'وضعیت صف در پایان روز': QUEUE.get(sym, '') or '—',
+                 'دلایل خرید': ' | '.join(why['buy']), 'دلایل فروش': ' | '.join(why['sell'])})
+json.dump(dict(day=day, median_buy=MED['buy'], median_sell=MED['sell'], base_buy=BASE_P['buy'], base_sell=BASE_P['sell']), open(os.path.join(ST, 'market_tilt.json'), 'w'))
+print('MARKET_TILT median buy', round(MED['buy'], 3), 'base', round(BASE_P['buy'], 3), '| median sell', round(MED['sell'], 3), 'base', round(BASE_P['sell'], 3))
 R = pd.DataFrame(rows)
 R['_o'] = R['سیگنال'].map({'خرید': 0, 'فروش': 1, 'خنثی': 2})
 R = R.sort_values(['_o', 'برتری نسبت به میانگین بازار'], ascending=[True, False]).drop(columns='_o')
@@ -104,10 +129,10 @@ CALT = pd.DataFrame(cal_rows)
 guide = [
     ('این فایل چیست', f'نتیجهٔ بررسی پایان روز {day} برای همهٔ نمادهایی که امروز معامله شدند ({len(R)} نماد).'),
     ('سیگنال', 'خرید یا فروش وقتی آن سمت محتمل‌تر از سمت دیگر باشد و دست‌کم ۵ واحد درصد از میانگین بازار همان سمت بهتر باشد؛ وگرنه خنثی.'),
-    ('قدرت سیگنال', 'قوی: اطمینان دست‌کم ۱۰ واحد درصد بالاتر از میانگین بازار. متوسط: ۵ تا ۱۰ واحد.'),
+    ('قدرت سیگنال', 'قوی: برتری دست‌کم ۱۰ واحد درصد. متوسط: ۵ تا ۱۰ واحد. ضعیف: ۲ تا ۵ واحد (فقط برای مقایسهٔ نسبی؛ از ۲۰ مهر اضافه شد).'),
     ('اطمینان', 'احتمال برآوردی این که قیمت در ۱۰ روز معاملاتی آینده اول ۵٪ در جهت سیگنال حرکت کند، قبل از این که ۵٪ خلاف آن برود. مبنای قیمت: قیمت پایانی امروز.'),
     ('میانگین بازار', f'در ۱۴۰۴–۱۴۰۵ این اتفاق برای خرید در {BASE_P["buy"]:.0%} و برای فروش در {BASE_P["sell"]:.0%} نمادها رخ داده است. اطمینان را با این عددها مقایسه کنید، نه با ۵۰٪.'),
-    ('برتری نسبت به میانگین بازار', 'اطمینان منهای میانگین بازار همان سمت. ستون مرتب‌سازی اصلی است.'),
+    ('برتری نسبت به میانگین بازار', 'اطمینان منهای مبنای همان سمت. مبنا بزرگ‌ترِ این دو است: میانگین تاریخی بازار، و میانهٔ همهٔ نمادها در همان روز. این‌طور وقتی مدل برای کل بازار خوش‌بین یا بدبین است، فقط نمادهایی سیگنال می‌گیرند که از بقیه بهترند. ستون مرتب‌سازی اصلی است.'),
     ('مدل ۵٪ (کالیبره)', 'احتمال مدل یادگیری ماشین، تبدیل‌شده به نرخ واقعی که روی دادهٔ ۱۴۰۴–۱۴۰۵ (خارج از دادهٔ آموزش) دیده شد. جدول تبدیل در برگهٔ «کالیبراسیون» است.'),
     ('دلایل', 'قاعده‌هایی که امروز برای این نماد فعال شدند، با نرخ موفقیت همان قاعده روی همین نماد (ترکیب تاریخچه و نتایج زنده، با وزن بیشتر روی زنده). نرخ هر قاعده به سمت میانگین بازار کشیده شده تا نمونهٔ کم باعث اطمینان کاذب نشود.'),
     ('ترکیب', 'اطمینان = میانگین وزنی: مدل ۵٪ با وزن ۲، هر قاعده با وزن ۱ (یا ۰٫۵ اگر کمتر از ۱۰ نمونه دارد).'),

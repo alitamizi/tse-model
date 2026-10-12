@@ -9,7 +9,8 @@ try:
     mj = json.load(open(os.path.join(D, 'macro.json')))['items']; ij = json.load(open(os.path.join(D, 'indices.json')))
     bo = [x for x in ij['بازارها'] if x['بازار'] == 'بورس'][0]
     day = pd.Timestamp(bo['زمان'][:10])
-    if bo.get('شاخص کل', 0) > 0 and (day not in M.index):
+    X_, _ = pd.read_pickle(os.path.join(B, 'panel.pkl')); sess = max(x.index[-1] for x in X_.values())   # only the last completed session
+    if bo.get('شاخص کل', 0) > 0 and day == sess and (day not in M.index):
         row = dict(usd=mj['price_dollar_rl']['قیمت'], nima=mj['ice_transfer_usd_sell']['قیمت'], tedpix=bo['شاخص کل'], ewt=bo['شاخص هم‌وزن'])
         M.loc[day, list(row)] = list(row.values()); M = M.sort_index(); M[['rf', 'rfavg']] = M[['rf', 'rfavg']].ffill()
         M.to_pickle(H)

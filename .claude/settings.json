@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 code/bootstrap.py:*)",
+      "Bash(python3 live.py:*)",
+      "Bash(python3 replay_hourly.py:*)",
+      "Bash(python3 eval_decisions.py:*)",
+      "Bash(python3 excel_eval.py:*)",
+      "Bash(python3 macro_regime.py:*)",
+      "Bash(python3 daily_sheet.py:*)",
+      "Bash(python3 five_final.py:*)",
+      "Bash(python3 calib_five.py:*)"
+    ]
+  }
+}

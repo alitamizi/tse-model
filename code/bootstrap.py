@@ -34,10 +34,13 @@ def restore():
         N = pd.read_pickle(os.path.join(REPO, 'state', 'panel_base', 'N.pkl.xz'))
         pd.to_pickle((X, N), os.path.join(RUN, 'panel.pkl'))
     base = open(os.path.join(REPO, 'state', 'panel_base', 'base_date.txt')).read().strip()
-    days = sorted({os.path.basename(p)[:10] for p in glob.glob(os.path.join(td, 'archive', '20??-??-??.csv.xz'))})
-    for d in [d for d in days if d > base]:
-        r = subprocess.run([sys.executable, 'catchup.py', d], cwd=RUN, capture_output=True, text=True)
-        print('catchup', d, (r.stdout.strip().splitlines() or [''])[-1], r.stderr.strip()[-200:] if r.returncode else '')
+    arch = {os.path.basename(p)[:10] for p in glob.glob(os.path.join(td, 'archive', '20??-??-??.csv.xz'))}
+    saved = {os.path.basename(p)[:10] for p in glob.glob(os.path.join(REPO, 'state', 'daily', '20??-??-??.csv'))}
+    for d in sorted(d for d in arch | saved if d > base):
+        # minute archive first; a day without archive is filled from the saved end-of-day rows, so later days are not mis-adjusted
+        cmd = ['catchup.py', d] if d in arch else ['fill_from_daily.py', d]
+        r = subprocess.run([sys.executable] + cmd, cwd=RUN, capture_output=True, text=True)
+        print(cmd[0], d, (r.stdout.strip().splitlines() or [''])[-1], r.stderr.strip()[-200:] if r.returncode else '')
     print('RESTORED', RUN)
 def save():
     os.makedirs(os.path.join(REPO, 'state'), exist_ok=True); os.makedirs(os.path.join(REPO, 'reports'), exist_ok=True)
@@ -45,6 +48,12 @@ def save():
         p = os.path.join(ST, f)
         if os.path.exists(p): shutil.copy(p, os.path.join(REPO, 'state'))
     shutil.copy(os.path.join(RUN, 'macro', 'macro_hist.pkl'), os.path.join(REPO, 'state', 'macro_hist.pkl'))
+    # keep the latest session's end-of-day rows (needed if its minute archive is ever missing)
+    import pandas as pd
+    X, _ = pd.read_pickle(os.path.join(RUN, 'panel.pkl')); last = max(x.index[-1] for x in X.values())
+    rows = [x.iloc[[-1]].assign(sym=k) for k, x in X.items() if x.index[-1] == last]
+    os.makedirs(os.path.join(REPO, 'state', 'daily'), exist_ok=True)
+    pd.concat(rows).rename_axis('date').reset_index().to_csv(os.path.join(REPO, 'state', 'daily', f'{last.date()}.csv'), index=False)
     for f in ('five_models.pkl', 'five_calib.pkl'): shutil.copy(os.path.join(RUN, f), os.path.join(REPO, 'models'))
     for p in glob.glob(os.path.join(ST, 'reports', 'signals_*.xlsx')): shutil.copy(p, os.path.join(REPO, 'reports'))
     g = ['git', '-C', REPO]

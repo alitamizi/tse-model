@@ -8,7 +8,8 @@ FL = pd.read_csv(os.path.join(live.STATE, 'symbol_flow_hist.csv'))[['sym', 'rule
 H = pd.concat([H[['sym', 'rule', 'n', 'k']], FL])
 E = pd.read_csv(os.path.join(live.STATE, 'evaluation.csv')) if os.path.exists(os.path.join(live.STATE, 'evaluation.csv')) else pd.DataFrame(columns=['sym', 'rule', 'result'])
 E = E[E.result.isin(['درست', 'غلط'])]
-Lv = E.groupby(['sym', 'rule']).result.agg(n_live='size', k_live=lambda s: (s == 'درست').sum()).reset_index()
+# only resolved outcomes count (open signals used to be counted as misses until 2026-10-19)
+Lv = E[E.result.isin(['درست', 'غلط'])].groupby(['sym', 'rule']).result.agg(n_live='size', k_live=lambda s: (s == 'درست').sum()).reset_index()
 B = H.merge(Lv, on=['sym', 'rule'], how='outer').fillna({'n': 0, 'k': 0, 'n_live': 0, 'k_live': 0})
 B['score'] = (0.5 * B.k + 3 * B.k_live + 1) / (0.5 * B.n + 3 * B.n_live + 2)
 B['hist_hit'] = B.k / B.n.replace(0, np.nan); B['live_hit'] = B.k_live / B.n_live.replace(0, np.nan)

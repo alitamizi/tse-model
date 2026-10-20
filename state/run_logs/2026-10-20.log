@@ -4,3 +4,18 @@ WARNING: Running pip as the 'root' user can result in broken permissions and con
 catchup.py 2026-10-20 2026-10-20 00:00:00 717 6 
 RESTORED /home/claude/multi
 == STEP close
+DATA fetched_at_utc=2026-10-20T09:55:07Z lag=485s session=2026-10-20 appended=0 adjusted=0
+MARKET شاخص کل 8,272,266 (+0.22٪) | سهم‌های مثبت 72% | صف خرید 315 | صف فروش 157 | ورود پول حقیقی 344 میلیارد تومان
+TECH signals 4428 | DIVERGENCES 110 (منفی 106 / مثبت 4 )
+SYNC pushed
+== STEP sweep
+21 checkpoints logged, 179 rows
+== STEP eval
+== STEP macro
+== STEP sheet
+MARKET_TILT median buy 0.535 base 0.465 | median sell 0.324 base 0.299
+/home/claude/multi/live_state/reports/signals_2026-10-20.xlsx
+فروش    293
+خرید    217
+خنثی    207
+== STEP save

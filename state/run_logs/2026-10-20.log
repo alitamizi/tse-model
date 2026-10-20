@@ -1,0 +1,6 @@
+== STEP restore
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+catchup.py 2026-10-20 2026-10-20 00:00:00 717 6 
+RESTORED /home/claude/multi
+== STEP close

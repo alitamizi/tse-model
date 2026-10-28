@@ -26,3 +26,5 @@ MARKET_TILT median buy 0.521 base 0.468 | median sell 0.361 base 0.297
 خرید    192
 == STEP retrain
 == STEP save
+PUSH 0
+== DONE 2026-10-28  report=/home/claude/multi/live_state/reports/signals_2026-10-28.xlsx

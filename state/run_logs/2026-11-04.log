@@ -15,3 +15,19 @@ catchup.py 2026-11-03 2026-11-03 00:00:00 726 6
 catchup.py 2026-11-04 2026-11-04 00:00:00 714 3 
 RESTORED /home/claude/multi
 == STEP close
+DATA fetched_at_utc=2026-11-04T10:02:51Z lag=50s session=2026-11-04 appended=0 adjusted=0
+MARKET شاخص کل 7,912,649 (+1.13٪) | سهم‌های مثبت 62% | صف خرید 332 | صف فروش 133 | ورود پول حقیقی 2,190 میلیارد تومان
+TECH signals 5045 | DIVERGENCES 71 (منفی 66 / مثبت 5 )
+SYNC pushed
+== STEP sweep
+21 checkpoints logged, 195 rows
+== STEP eval
+== STEP macro
+== STEP sheet
+MARKET_TILT median buy 0.516 base 0.468 | median sell 0.371 base 0.299
+/home/claude/multi/live_state/reports/signals_2026-11-04.xlsx
+فروش    301
+خنثی    218
+خرید    195
+== STEP retrain
+== STEP save

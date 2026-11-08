@@ -32,3 +32,5 @@ MARKET_TILT median buy 0.523 base 0.468 | median sell 0.361 base 0.3
 خنثی    257
 خرید    178
 == STEP save
+PUSH 0
+== DONE 2026-11-08  report=/home/claude/multi/live_state/reports/signals_2026-11-08.xlsx

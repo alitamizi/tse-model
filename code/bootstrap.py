@@ -7,7 +7,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN = '/home/claude/multi'; ST = os.path.join(RUN, 'live_state')
 STATE_FILES = ['signals.csv', 'verdicts.csv', 'positions.csv', 'evaluation.csv', 'symbol_methods.csv', 'symbol_flow_hist.csv', 'tech_state.csv',
                'divergence.csv', 'decisions_10m.csv', 'decision_eval.csv', 'metrics_daily.csv', 'five_scores.csv', 'excel_eval.csv',
-               'macro_regime.json', 'market_tilt.json', 'seen.json', 'prev_alerts.json', 'news.csv', 'news_impact.csv']
+               'macro_regime.json', 'market_tilt.json', 'seen.json', 'prev_alerts.json', 'news.csv', 'news_impact.csv', 'opt_signals.csv']
 def sh(*a, **k): return subprocess.run(list(a), check=True, **k)
 def restore():
     for pkg in ('lightgbm', 'statsmodels', 'openpyxl', 'sklearn'):

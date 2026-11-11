@@ -20,6 +20,7 @@ if ls live_state/tse-data/archive/$DAY.csv.* >/dev/null 2>&1; then
   python3 replay_hourly.py $DAY sweep $START 12:30 | grep -E "checkpoints|Error" || fail sweep
 else fail "sweep (no minute archive for $DAY yet)"; fi
 step eval; python3 eval_decisions.py > /dev/null || fail eval_decisions; python3 excel_eval.py > /dev/null || fail excel_eval
+step opt_shadow; timeout 600 python3 opt_shadow.py $DAY | grep -E "^OPT_" || fail opt_shadow
 step macro; python3 macro_regime.py > /dev/null || fail macro_regime
 step sheet; timeout 1500 python3 daily_sheet.py | grep -E "MARKET_TILT|xlsx|^خرید|^فروش|^خنثی" || fail daily_sheet
 if [ "$(TZ=Asia/Tehran date +%u)" = "3" ]; then step retrain; python3 five_final.py > /dev/null && python3 calib_five.py > /dev/null || fail retrain; fi

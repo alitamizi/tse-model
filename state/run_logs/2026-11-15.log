@@ -22,3 +22,22 @@ catchup.py 2026-11-14 2026-11-14 00:00:00 735 4
 catchup.py 2026-11-15 2026-11-15 00:00:00 732 8 
 RESTORED /home/claude/multi
 == STEP close
+DATA fetched_at_utc=2026-11-16T02:34:25Z lag=4813s session=2026-11-15 appended=0 adjusted=0
+MARKET شاخص کل 8,465,657 (+1.34٪) | سهم‌های مثبت 78% | صف خرید 0 | صف فروش 0 | ورود پول حقیقی 4,752 میلیارد تومان
+TECH signals 4420 | DIVERGENCES 95 (منفی 95 / مثبت 0 )
+SYNC pushed
+== STEP sweep
+21 checkpoints logged, 164 rows
+== STEP eval
+== STEP opt_shadow
+OPT_TODAY 2026-11-15 خرید شپنا (+0.30) | خرید فزر (+0.26) | خرید دارونو (+0.26) | فروش فملی (-0.32) | فروش خساپا (-0.34) | فروش تاصیکو (-0.42)
+OPT_EVAL خرید: n=25 روز=15 درست=64% yn=+0.76% xn=+0.91%
+OPT_EVAL فروش: n=33 روز=19 درست=85% yn=-1.62% xn=-0.96%
+== STEP macro
+== STEP sheet
+MARKET_TILT median buy 0.474 base 0.466 | median sell 0.382 base 0.303
+/home/claude/multi/live_state/reports/signals_2026-11-15.xlsx
+خنثی    306
+فروش    286
+خرید    140
+== STEP save

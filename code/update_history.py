@@ -16,7 +16,7 @@ How it works
 import os, sys, io, glob, zipfile
 import numpy as np, pandas as pd
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.environ.get('TSE_MODEL_REPO', '/home/claude/tse-model')  # code is copied into the run dir, so no path from __file__
 HIST = os.path.join(REPO, 'history')
 COLS = ['تاریخ میلادی', 'تاریخ شمسی', 'اولین', 'بیشترین', 'کمترین', 'پایانی', 'آخرین', 'حجم', 'ارزش (ریال)',
         'تعداد معاملات', 'قدرت خریدار حقیقی', 'ورود پول حقیقی (ریال)', 'ارزش بازار (ریال)']

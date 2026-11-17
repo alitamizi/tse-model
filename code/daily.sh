@@ -12,6 +12,7 @@ step restore; cd $REPO && python3 code/bootstrap.py restore || { fail restore; e
 cd $RUN
 # fill a missing session from state/daily if the archive skipped a day (see NOTES)
 step close; timeout 1800 python3 live.py close | grep -E "^DATA|MODEL_ERROR|MARKET|DIVERG|SYNC|Traceback|Error" || fail close
+step history; timeout 600 python3 update_history.py panel.pkl | grep -E "^HISTORY|Traceback|Error" || fail history
 step sweep
 if ls live_state/tse-data/archive/$DAY.csv.* >/dev/null 2>&1; then
   cp live_state/decisions_10m.csv live_state/decisions_10m.bak
